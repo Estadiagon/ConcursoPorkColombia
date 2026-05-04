@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Jurados - Maestro en Cortes 2026</title>
+    <!-- Cargamos la librería de Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root { --pork-pink: #f65275; --pork-orange: #f39200; --dark-gray: #333; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f8f9fa; color: var(--dark-gray); display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .container { background: white; padding: 30px; border-radius: 20px; width: 100%; max-width: 750px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); border-top: 10px solid var(--pork-orange); text-align: center; }
+        .row { display: flex; justify-content: space-between; align-items: center; background: #fff; margin-bottom: 10px; padding: 15px; border-radius: 12px; border: 1px solid #ddd; }
+        .pts-display { font-size: 1.8em; font-weight: bold; color: var(--pork-orange); min-width: 50px; }
+        button { cursor: pointer; border: none; font-weight: bold; color: white; border-radius: 8px; transition: 0.2s; }
+        .btn-add { background: var(--pork-pink); padding: 12px 25px; }
+        .btn-plus { background: var(--pork-orange); padding: 10px; margin-left: 4px; width: 40px; }
+        .btn-minus { background: #eee; color: #666; padding: 10px; width: 40px; }
+        .btn-reset { background: none; color: #bbb; font-size: 0.8em; text-decoration: underline; margin-top: 20px; cursor: pointer; }
+        input { padding: 12px; border-radius: 10px; border: 2px solid #eee; flex-grow: 1; outline: none; margin-right: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1 style="margin:0; font-size: 1.5em;">MAESTRO EN CORTES <span style="color:var(--pork-orange);">2026</span></h1>
+    <p style="color:var(--pork-pink); font-weight:bold; margin-bottom:20px;">CALIFICACIÓN JURADOS - 4ta EDICIÓN</p>
+
+    <div style="display:flex; margin-bottom:30px;">
+        <input type="text" id="nameIn" placeholder="Nombre del participante...">
+        <button class="btn-add" onclick="addP()">Añadir</button>
+    </div>
+
+    <div id="list"></div>
+    <div class="btn-reset" onclick="resetAll()">Reiniciar concurso para nueva zona</div>
+</div>
+
+<script>
+    // CONFIGURACIÓN ÚNICA DE SUPABASE
+    const SUPABASE_URL = 'https://uapptffjuauwunhbvqu.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_ZnGg75rZoPLIAvhnCRum2A_b7jhYgYe';
+    
+    // Inicializamos el cliente una sola vez
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    async function fetchAndRender() {
+        const { data: participantes, error } = await supabaseClient
+            .from('participantes')
+            .select('*')
+            .order('nombre', { ascending: true });
+        
+        if (error) { console.error("Error al obtener datos:", error); return; }
+
+        const list = document.getElementById('list');
+        list.innerHTML = participantes.map(p => `
+            <div class="row">
+                <span style="font-weight:bold;">${p.nombre}</span>
+                <div style="display:flex; align-items:center;">
+                    <div class="pts-display">${p.puntos}</div>
+                    <button class="btn-minus" onclick="update(${p.id}, ${p.puntos}, -1)">-1</button>
+                    <button class="btn-plus" onclick="update(${p.id}, ${p.puntos}, 1)">+1</button>
+                    <button class="btn-plus" onclick="update(${p.id}, ${p.puntos}, 5)">+5</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async function addP() {
+        const nameInput = document.getElementById('nameIn');
+        const name = nameInput.value.trim();
+        if(!name) return;
+
+        const { error } = await supabaseClient
+            .from('participantes')
+            .insert([{ nombre: name, puntos: 0 }]);
+        
+        if (error) { alert("Error al añadir: " + error.message); } 
+        else { nameInput.value = ""; fetchAndRender(); }
+    }
+
+    async function update(id, currentPuntos, val) {
+        await supabaseClient
+            .from('participantes')
+            .update({ puntos: currentPuntos + val })
+            .eq('id', id);
+        fetchAndRender();
+    }
+
+    async function resetAll() {
+        if(confirm("¿Borrar todos los participantes?")) {
+            await supabaseClient.from('participantes').delete().gt('id', 0);
+            fetchAndRender();
+        }
+    }
+
+    // Suscripción Realtime
+    supabaseClient
+        .channel('pork-live')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'participantes' }, () => {
+            fetchAndRender();
+        })
+        .subscribe();
+
+    window.onload = fetchAndRender;
+</script>
+</body>
+</html>
